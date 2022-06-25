@@ -1,0 +1,104 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Serverless deployment pipeline for Terraform projects
+
+Resources:
+  TerraformStateBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+  ArtifactStoreBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      AccessControl: BucketOwnerFullControl
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      RoleArn: !GetAtt PipelineRole.Arn
+      ArtifactStore:
+        Location: !Ref ArtifactStoreBucket
+        Type: S3
+      Stages:
+        - Name: Source
+          Actions:
+            - InputArtifacts: []
+              Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Version: 1
+                Provider: GitHub
+              OutputArtifacts:
+                - Name: SourceOutput
+              Configuration:
+                Owner: priyanshuush
+                Repo: terraform-files
+                Branch: main
+                OAuthToken: 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
+              RunOrder: 1
+        - Name: InvokeTerraform
+          Actions:
+          - Name: InvokeTerraformAction
+            ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+            OutputArtifacts:
+              - Name: InvokeTerraformOutput
+            InputArtifacts:
+              - Name: SourceOutput
+            Configuration:
+                ProjectName: !Ref InvokeTerraformBuild
+            RunOrder: 1
+  PipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: Allow
+          Principal:
+            Service: codepipeline.amazonaws.com
+          Action: sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
+  InvokeTerraformBuild:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/eb-go-1.5-amazonlinux-64:2.1.3
+        Type: LINUX_CONTAINER
+      Name: !Sub ${AWS::StackName}-InvokeTerraformBuild
+      ServiceRole: !Ref InvokeTerraformBuildRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Sub |
+          version: 0.1
+          phases:
+            install:
+              commands:
+                - yum -y install jq
+                - cd /tmp && curl -o terraform.zip https://releases.hashicorp.com/terraform/0.8.7/terraform_0.8.7_linux_amd64.zip && echo "7ca424d8d0e06697cc7f492b162223aef525bfbcd69248134a0ce0b529285c8c terraform.zip" | sha256sum -c --quiet && unzip terraform.zip && mv terraform /usr/bin
+            build:
+              commands:
+                - terraform apply
+  InvokeTerraformBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: Allow
+          Principal:
+            Service: codebuild.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/PowerUserAccess
