@@ -13,7 +13,7 @@ phases:
 
     build:
       commands:
-        - terraform $TF_COMMAND -auto-approve
+        - terraform apply -auto-approve
 
     post_build:
       commands:
