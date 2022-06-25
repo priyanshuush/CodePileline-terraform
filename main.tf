@@ -4,15 +4,6 @@ provider "aws" {
     access_key = ""
 }
 
-terraform {
- backend "s3" {
-    encrypt = false
-    bucket = "tf-state-s3"
-    dynamodb_table = "tf-state-lock-dynamo"
-    key = "path/path/terraform-tfstate"
-    region = "ap-south-1"
- }
-}
 
 resource "aws_iam_role" "iam_for_lambda" {
   name = "iam_for_lambda"
